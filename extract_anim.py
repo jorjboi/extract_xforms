@@ -1,8 +1,13 @@
 import hou
 
+static_parts = {}
 
-def create_main_subnet():
-    subnet_node = hou.node("/obj").createNode("subnet", "extract_animation")
+
+def create_main_subnet(parent_node, node_name=''):
+    if node_name:
+        subnet_node = parent_node.createNode("subnet", node_name)
+    else:
+        subnet_node = parent_node.createNode('subnet')
     subnet_node.moveToGoodPosition()
     return subnet_node
 
@@ -74,7 +79,7 @@ def create_outputs(parent_node, input_node):
 
 
 def extract_anim(parent_node, moving_parts):
-    for part in moving_parts.keys():
+    for part in moving_parts:
         extract_geo = parent_node.createNode(
             "extractgeo", "extract_part_{0}".format(part))
         extract_geo.moveToGoodPosition()
@@ -86,11 +91,32 @@ def extract_anim(parent_node, moving_parts):
         obj_merge.parm('objpath1').set(moving_parts[part][0].path())
         static_geo.setInput(0, extract_geo)
         static_geo.moveToGoodPosition(move_inputs=False)
+        static_parts[part] = static_geo
 
 
-def main(alembic_path):
-    subnet_node = create_main_subnet()
+def create_packed_geo_dops(parent_node):
+    packed_nodes = []
+    for part in static_parts:
+        packed_geo = parent_node.createNode(
+            'rbdpackedobject', 'part_{0}'.format(part))
+        packed_geo.moveToGoodPosition()
+        packed_nodes.append(packed_geo)
+    return packed_nodes
+
+
+def extract(alembic_path):
+    subnet_node = create_main_subnet(hou.node('/obj'), 'extract_animation')
     divide_node = create_divide_into_parts_geo_node(subnet_node)
     divide_hda = divide_into_parts(divide_node, alembic_path)
     parts = create_outputs(divide_node, divide_hda)
     extract_anim(subnet_node, parts)
+
+
+def create_collisions(dop_path):
+    # Create a subnet inside DOPs
+    subnet = create_main_subnet(hou.node(dop_path), 'collisions')
+    # Create Packed Geo obj (set all params)
+    packed_nodes = create_packed_geo_dops(subnet)
+    # Merge all packed geo
+
+    pass
