@@ -91,7 +91,10 @@ def extract_anim(parent_node, moving_parts):
         obj_merge.parm('objpath1').set(moving_parts[part][0].path())
         static_geo.setInput(0, extract_geo)
         static_geo.moveToGoodPosition(move_inputs=False)
-        static_parts[part] = static_geo
+        static_null = static_geo.createNode("null", "OUT")
+        static_null.setInput(0, obj_merge)
+        static_null.moveToGoodPosition(move_inputs=False)
+        static_parts[part] = static_null
 
 
 def create_packed_geo_dops(parent_node):
@@ -100,8 +103,18 @@ def create_packed_geo_dops(parent_node):
         packed_geo = parent_node.createNode(
             'rbdpackedobject', 'part_{0}'.format(part))
         packed_geo.moveToGoodPosition()
+        packed_geo.parm('soppath').set(static_parts[part].path())
+        packed_geo.setParms({'initialstate': 2, 'usetransform': 1})
         packed_nodes.append(packed_geo)
     return packed_nodes
+
+
+def merge_packed_nodes(parent_node, nodes_to_merge):
+    merge_node = parent_node.createNode('merge')
+    for node in nodes_to_merge:
+        merge_node.setNextInput(node)
+        merge_node.moveToGoodPosition(move_inputs=False)
+    return merge_node
 
 
 def extract(alembic_path):
@@ -112,11 +125,19 @@ def extract(alembic_path):
     extract_anim(subnet_node, parts)
 
 
+def create_output(parent_node, input_node):
+    output = parent_node.createNode("output")
+    output.setInput(0, input_node)
+    output.moveToGoodPosition(move_inputs=False)
+    output.setDisplayFlag(True)
+
+
 def create_collisions(dop_path):
     # Create a subnet inside DOPs
     subnet = create_main_subnet(hou.node(dop_path), 'collisions')
     # Create Packed Geo obj (set all params)
     packed_nodes = create_packed_geo_dops(subnet)
     # Merge all packed geo
-
+    merge_node = merge_packed_nodes(subnet, packed_nodes)
+    create_output(subnet, merge_node)
     pass
