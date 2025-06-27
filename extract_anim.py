@@ -17,11 +17,12 @@ def create_divide_into_parts_geo_node(parent_node):
     divide_geo_node.setDisplayFlag(0)
     return divide_geo_node
 
-def divide_into_parts(parent_node, alembic_path):
+def divide_into_parts(parent_node, alembic_path, rest_frame, anim_frame, orient_threshold):
     obj_merge = parent_node.createNode('object_merge', 'merge_alembic')
     obj_merge.moveToGoodPosition() 
     obj_merge.parm('objpath1').set(alembic_path)
     divide_by_xform = parent_node.createNode('divide_by_xform')
+    divide_by_xform.setParms({'rest_frame': rest_frame, 'anim_frame':anim_frame, 'orient_angle_threshold':orient_threshold})
     divide_by_xform.setInput(0, obj_merge)
     divide_by_xform.moveToGoodPosition(move_inputs=False)
     return divide_by_xform
@@ -107,23 +108,25 @@ def create_output(parent_node, input_node):
     output.moveToGoodPosition(move_inputs=False)
     output.setDisplayFlag(True)
 
-def extract(alembic_path):
-    subnet_node=create_main_subnet(hou.node('/obj'), 'extract_animation')
+def extract(alembic_path, object_name, rest_frame, anim_frame, orient_threshold):
+    subnet_node=create_main_subnet(hou.node('/obj'), '{0}_extract_animation'.format(object_name))
     divide_node = create_divide_into_parts_geo_node(subnet_node)
-    divide_hda = divide_into_parts(divide_node, alembic_path)
+    divide_hda = divide_into_parts(divide_node, alembic_path, rest_frame, anim_frame, orient_threshold)
     parts=create_outputs(divide_node, divide_hda)
     extract_animation(subnet_node, parts)
 
 
-def create_collisions(dop_path):
+def create_collisions(dop_path, object_name):
     # Create a subnet inside DOPS
-    subnet_node=create_main_subnet(hou.node(dop_path), 'collisions')
+    subnet_node=create_main_subnet(hou.node(dop_path), '{0}_collisions'.format(object_name))
     print(static_parts)
     # Create packed geo obj (set all params)
     packed_nodes = create_packed_geo_dops(subnet_node)
     # merge all packed geo nodes
     merge_node=merge_packed_nodes(subnet_node, packed_nodes)
     create_output(subnet_node, merge_node)
+
+
 
 
 
