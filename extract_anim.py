@@ -17,12 +17,12 @@ def create_divide_into_parts_geo_node(parent_node):
     divide_geo_node.setDisplayFlag(0)
     return divide_geo_node
 
-def divide_into_parts(parent_node, alembic_path, rest_frame, anim_frame, orient_threshold):
+def divide_into_parts(parent_node, alembic_path, piece_attrib, rest_frame, anim_frame, orient_threshold):
     obj_merge = parent_node.createNode('object_merge', 'merge_alembic')
     obj_merge.moveToGoodPosition() 
     obj_merge.parm('objpath1').set(alembic_path)
     divide_by_xform = parent_node.createNode('divide_by_xform')
-    divide_by_xform.setParms({'rest_frame': rest_frame, 'anim_frame':anim_frame, 'orient_angle_threshold':orient_threshold})
+    divide_by_xform.setParms({'piece_attrib':piece_attrib,'rest_frame': rest_frame, 'anim_frame':anim_frame,  'orient_angle_threshold':orient_threshold})
     divide_by_xform.setInput(0, obj_merge)
     divide_by_xform.moveToGoodPosition(move_inputs=False)
     return divide_by_xform
@@ -53,13 +53,25 @@ def create_anim_output(parent_node, input_node, part):
     null_node.moveToGoodPosition(move_inputs=False)
     return null_node    
 
-def create_outputs(parent_node, input_node):
+def create_outputs(parent_node, input_node, unpack):
     attrib_name = input_node.evalParm('moving_parts_attrib')
     total_parts = input_node.geometry().attribValue(attrib_name)
     parts = {}
+    next_input = input_node
+    if unpack:
+        unpack_node = parent_node.createNode('unpack')
+        unpack_node.setInput(0, input_node)
+        unpack_node.moveToGoodPosition(move_inputs=False)
+        unpack_node.parm('transfer_attributes').set(attrib_name)
+        convert=parent_node.createNode('convert')
+        convert.setInput(0, unpack_node)
+        convert.moveToGoodPosition(move_inputs=False)
+        next_input = convert
+
     for part in range(1, total_parts + 1):
+        print(part)
         # Blast all except current part
-        blast_node=blast_all_except_current_part(parent_node, input_node, attrib_name, part)
+        blast_node=blast_all_except_current_part(parent_node, next_input, attrib_name, part)
         # Create static output w time shift
         static_output=create_static_output(parent_node, blast_node, part)
         # Create anim output w time shift
@@ -108,18 +120,18 @@ def create_output(parent_node, input_node):
     output.moveToGoodPosition(move_inputs=False)
     output.setDisplayFlag(True)
 
-def extract(alembic_path, object_name, rest_frame, anim_frame, orient_threshold):
+def extract(alembic_path, object_name, piece_attrib, rest_frame, anim_frame, orient_threshold, unpack):
     subnet_node=create_main_subnet(hou.node('/obj'), '{0}_extract_animation'.format(object_name))
     divide_node = create_divide_into_parts_geo_node(subnet_node)
-    divide_hda = divide_into_parts(divide_node, alembic_path, rest_frame, anim_frame, orient_threshold)
-    parts=create_outputs(divide_node, divide_hda)
+    divide_hda = divide_into_parts(divide_node, alembic_path, piece_attrib, rest_frame, anim_frame, orient_threshold)
+    parts=create_outputs(divide_node, divide_hda, unpack)
     extract_animation(subnet_node, parts)
 
 
 def create_collisions(dop_path, object_name):
     # Create a subnet inside DOPS
     subnet_node=create_main_subnet(hou.node(dop_path), '{0}_collisions'.format(object_name))
-    print(static_parts)
+    # print(static_parts)
     # Create packed geo obj (set all params)
     packed_nodes = create_packed_geo_dops(subnet_node)
     # merge all packed geo nodes
